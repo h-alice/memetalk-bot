@@ -1,0 +1,15 @@
+services:
+  llamacpp-backend:
+    image: llamacpp-backend
+    build:
+      context: llamacpp-python-server
+    ports: # Remove after tested, since we'll use docker container network instead.
+      - "8000:8000" # Remove after tested.
+    command: ["python3", "-m", "llama_cpp.server", "--hf_model_repo_id", "${MODEL_REPO}", "--model", "${MODEL_NAME}", "--port", "8000", "--host", "0.0.0.0"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

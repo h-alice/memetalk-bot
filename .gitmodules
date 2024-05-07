@@ -1,0 +1,3 @@
+[submodule "irc-chatbot/irc"]
+	path = irc-chatbot/irc
+	url = git@github.com:h-alice/irc-client.git
