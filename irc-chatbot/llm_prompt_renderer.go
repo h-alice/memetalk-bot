@@ -1,5 +1,9 @@
 package main
 
+import (
+	"github.com/kluctl/go-jinja2"
+)
+
 type Message struct {
 	Role    string
 	Content string
@@ -32,4 +36,29 @@ func NewPromptRenderer(promptTemplate string, bosToken string, addGenerationProm
 		BosToken:            bosToken,
 		AddGenerationPrompt: addGenerationPrompt,
 	}
+}
+
+func (pr *PromptRenderer) RenderPrompt(messages []Message) (string, error) {
+
+	if len(messages) == 0 {
+		return "", nil
+	}
+
+	j2, err := jinja2.NewJinja2("prompt", 1,
+		jinja2.WithGlobal("bos_token", pr.BosToken),
+		jinja2.WithGlobal("add_generation_prompt", pr.AddGenerationPrompt),
+		jinja2.WithGlobal("messages", castMessageListToMapList(messages)),
+	)
+
+	if err != nil {
+		return "", err
+	}
+
+	s, err := j2.RenderString(pr.PromptTemplate)
+
+	if err != nil {
+		return "", err
+	}
+
+	return s, nil
 }
