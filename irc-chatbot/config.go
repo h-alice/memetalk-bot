@@ -47,11 +47,11 @@ type Config struct {
 }
 
 // Parse YAML configuration file.
-func ParseConfig(data []byte) (*Config, error) {
-	config := &Config{}
-	err := yaml.Unmarshal(data, config)
+func ParseConfig(data []byte) (Config, error) {
+	config := Config{}
+	err := yaml.Unmarshal(data, &config)
 	if err != nil {
-		return nil, err
+		return Config{}, err
 	}
 	return config, nil
 }
