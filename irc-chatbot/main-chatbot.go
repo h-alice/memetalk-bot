@@ -4,29 +4,106 @@ import (
 	"context"
 	"log"
 	"math/rand/v2"
+	"strings"
+	"time"
 
 	irc "github.com/h-alice/irc-client"
 )
 
+type BotMessage struct {
+	Username string
+	Message  string
+	Channel  string
+}
+
+func (bm BotMessage) String() string {
+	return "[" + bm.Channel + "] " + bm.Username + ": " + bm.Message
+}
+
 type MainChatbot struct {
-	chatbotName      string // Uses for tracking if bot got mentioned.
-	MessageContainer []string
+	chatbotName            string // Uses for tracking if bot got mentioned.
+	MessageSampleContainer []BotMessage
+	MessageReplyQueue      chan BotMessage
 
 	joinChannels []string
 	ircClient    *irc.IrcClient
+
+	minReplyDelaySeconds int
+	maxReplyDelaySeconds int
 }
 
-func (cb *MainChatbot) EnqueueMessage(msg string) {
-	cb.MessageContainer = append(cb.MessageContainer, msg)
-	if len(cb.MessageContainer) > 10 {
-		log.Printf("Dequeuing message: %s\n", cb.MessageContainer[0])
-		cb.MessageContainer = cb.MessageContainer[1:]
+func (cb *MainChatbot) EnqueueMessage(msg irc.IrcMessage) {
+
+	bm := BotMessage{
+		Username: msg.Prefix.Username,
+		Message:  msg.Message,
+		Channel:  msg.Params[0],
+	}
+
+	cb.MessageSampleContainer = append(cb.MessageSampleContainer, bm)
+	if len(cb.MessageSampleContainer) > 10 {
+		log.Printf("<MSGQUEUE> Dequeuing message: %s\n", cb.MessageSampleContainer[0])
+		cb.MessageSampleContainer = cb.MessageSampleContainer[1:]
+	}
+}
+
+func (cb *MainChatbot) EnqueueMessageToReply(msg BotMessage) {
+
+	// NOTE: Enqueue without blocking.
+	select {
+
+	case cb.MessageReplyQueue <- msg:
+		log.Printf("<REPLY QUEUE> Enqueued message to reply: %s\n", msg)
+
+	default:
+		log.Printf("<REPLY QUEUE> Message reply queue is full. Dropping message: %s\n", msg)
+
 	}
 }
 
 // Random sample one message from the container.
-func (cb *MainChatbot) MessageSampler() string {
-	return cb.MessageContainer[rand.IntN(len(cb.MessageContainer))]
+func (cb *MainChatbot) MessageSampler() BotMessage {
+	return cb.MessageSampleContainer[rand.IntN(len(cb.MessageSampleContainer))]
+}
+
+func (cb *MainChatbot) messageSamplerLoop(ctx context.Context) {
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		default:
+
+			if len(cb.MessageSampleContainer) == 0 {
+				continue
+			}
+
+			// Randomly sample a message from the container.
+			sampled_message := cb.MessageSampler()
+			// Enqueue the message to reply.
+			cb.EnqueueMessageToReply(sampled_message)
+
+			// Apply delay before replying.
+			delay_seconds := rand.IntN(cb.maxReplyDelaySeconds-cb.minReplyDelaySeconds) + cb.minReplyDelaySeconds
+			time.Sleep(time.Duration(delay_seconds) * time.Second)
+		}
+	}
+}
+
+func (cb *MainChatbot) botReplyLoop(ctx context.Context) {
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg := <-cb.MessageReplyQueue:
+			// Just print to stdout for now.
+			// Sample a message.
+			log.Printf("<REPLY> Sampled message: %s\n", msg)
+			//ircClient.SendMessage(irc.PRIVMSG(msg.Channel, msg.Message))
+		}
+	}
 }
 
 func (cb *MainChatbot) mainBotLogic() irc.IrcMessageCallback {
@@ -40,14 +117,26 @@ func (cb *MainChatbot) mainBotLogic() irc.IrcMessageCallback {
 		// We only care about PRIVMSG messages.
 		if parsed_message.Command == "PRIVMSG" {
 
+			// Handle direct mentions.
+			name_tag := "@" + cb.chatbotName
+
+			// Check if name tag is in the message.
+			if strings.Contains(parsed_message.Message, name_tag) {
+				log.Printf("<CALLBACK> Got mentioned: %s\n", parsed_message.Message)
+
+				// Directly enqueue the message to reply queue.
+				cb.EnqueueMessageToReply(BotMessage{
+					Username: parsed_message.Prefix.Username,
+					Message:  parsed_message.Message,
+					Channel:  parsed_message.Params[0],
+				})
+			}
+
 			// Enqueue the message.
-			cb.EnqueueMessage(parsed_message.Message)
+			cb.EnqueueMessage(parsed_message)
 
-			log.Printf("Enqueued message: %s\n", parsed_message.Message)
-			// Sample a message.
-			sampled_message := cb.MessageSampler()
+			log.Printf("<CALLBACK> Enqueued message: %s\n", parsed_message.Message)
 
-			log.Printf("Sampled message: %s\n", sampled_message)
 		}
 
 		return nil
@@ -60,8 +149,16 @@ func (cb *MainChatbot) Start(ctx context.Context) {
 
 	cb.ircClient.RegisterMessageCallback(cb.mainBotLogic())
 
-	ctx = context.WithoutCancel(ctx)
+	ctx, cancel := context.WithCancel(ctx)
 
+	// Start message sampler loop.
+	cb.MessageReplyQueue = make(chan BotMessage, 10)
+	go cb.messageSamplerLoop(ctx)
+
+	// Start bot reply loop.
+	go cb.botReplyLoop(ctx)
+
+	// Start IRC client.
 	client_status := make(chan error)
 	go func() {
 		client_status <- cb.ircClient.ClientLoop(ctx)
@@ -74,6 +171,8 @@ func (cb *MainChatbot) Start(ctx context.Context) {
 
 	<-client_status // Wait for client to exit.
 	log.Println("Client exited")
+
+	cancel() // Cleanup
 }
 
 func NewChatbot(config Config) *MainChatbot {
@@ -83,6 +182,9 @@ func NewChatbot(config Config) *MainChatbot {
 		ircClient:    ircClient,
 		joinChannels: config.TwitchIrcConfig.ChannelList,
 		chatbotName:  config.TwitchIrcConfig.Username,
+
+		minReplyDelaySeconds: config.ChatbotSetting.ReplySetting.ReplyMinDelaySeconds,
+		maxReplyDelaySeconds: config.ChatbotSetting.ReplySetting.ReplyMaxDelaySeconds,
 	}
 
 }
