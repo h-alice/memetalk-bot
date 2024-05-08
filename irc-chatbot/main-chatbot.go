@@ -39,8 +39,10 @@ func (cb *MainChatbot) mainBotLogic() irc.IrcMessageCallback {
 
 		// We only care about PRIVMSG messages.
 		if parsed_message.Command == "PRIVMSG" {
+
 			// Enqueue the message.
 			cb.EnqueueMessage(parsed_message.Message)
+
 			log.Printf("Enqueued message: %s\n", parsed_message.Message)
 			// Sample a message.
 			sampled_message := cb.MessageSampler()
@@ -65,6 +67,7 @@ func (cb *MainChatbot) Start(ctx context.Context) {
 		client_status <- cb.ircClient.ClientLoop(ctx)
 	}()
 
+	// Join channels.
 	for _, channel := range cb.joinChannels {
 		cb.ircClient.SendMessage(irc.JOIN(channel))
 	}
