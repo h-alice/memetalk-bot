@@ -2,40 +2,42 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
-
-	irc "github.com/h-alice/irc-client"
+	"log"
+	"os"
 )
 
 func main() {
 
-	sampleCallback := func(ircc *irc.IrcClient, msg string) error {
-		parsed_message, err := irc.ParseIrcMessage(msg)
-		if err != nil {
-			fmt.Println("Error while parsing message: ", err)
-		}
+	var config_path string
 
-		fmt.Printf("%+v\n", parsed_message)
-		return nil
+	// Load configuration from command line arguments.
+	flag.StringVar(&config_path, "config", "config.yaml", "Path to configuration file.")
+
+	flag.Parse()
+
+	// Load configuration from file.
+	config_data, err := os.ReadFile(config_path)
+	print("config_data: ", config_data)
+	if err != nil {
+		log.Fatalf("[x] Error while reading configuration file: %v\n", err)
 	}
 
-	ircc := irc.NewTwitchIrcClient("justinfan123", "bruh")
+	config, err := ParseConfig(config_data)
+	if err != nil {
+		log.Fatalf("[x] Error while parsing configuration file: %v\n", err)
+	}
 
-	ircc.RegisterMessageCallback(sampleCallback)
+	fmt.Printf("%+v\n", config)
 
 	ctx := context.Background()
-	client_status := make(chan error)
-	go func() {
-		client_status <- ircc.ClientLoop(ctx)
-	}()
 
-	// Send test.
+	// Create IRC client.
+	chatbot := NewChatbot(config)
 
-	ircc.SendCapabilityRequest(irc.CapabilityTags)
-	ircc.SendMessage(irc.JOIN("#twitch"))
-	ircc.SendMessage(irc.PING("tmi.twitch.tv"))
+	chatbot.Start(ctx)
 
-	<-client_status // Wait for client to exit.
 	fmt.Println("Client exited")
 
 }
