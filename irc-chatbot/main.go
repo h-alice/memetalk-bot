@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	irc "github.com/irc-chatbot/irc"
+	irc "github.com/h-alice/irc-client"
 )
 
 func main() {
