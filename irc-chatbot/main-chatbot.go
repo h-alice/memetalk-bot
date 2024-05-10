@@ -47,7 +47,18 @@ func (cb *MainChatbot) EnqueueMessage(msg irc.IrcMessage) {
 	}
 }
 
-func (cb *MainChatbot) EnqueueMessageToReply(msg BotMessage) {
+func (cb *MainChatbot) EnqueueMentionedMessage(msg irc.IrcMessage) {
+	bm := BotMessage{
+		Username: msg.Prefix.Username,
+		Message:  msg.Message,
+		Channel:  msg.Params[0],
+	}
+
+	// Directly enqueue the message to reply queue.
+	cb.enqueueMessageToReply(bm)
+}
+
+func (cb *MainChatbot) enqueueMessageToReply(msg BotMessage) {
 
 	// NOTE: Enqueue without blocking.
 	select {
@@ -82,7 +93,7 @@ func (cb *MainChatbot) messageSamplerLoop(ctx context.Context) {
 			// Randomly sample a message from the container.
 			sampled_message := cb.MessageSampler()
 			// Enqueue the message to reply.
-			cb.EnqueueMessageToReply(sampled_message)
+			cb.enqueueMessageToReply(sampled_message)
 
 			// Apply delay before replying.
 			delay_seconds := rand.IntN(cb.maxReplyDelaySeconds-cb.minReplyDelaySeconds) + cb.minReplyDelaySeconds
@@ -101,7 +112,11 @@ func (cb *MainChatbot) botReplyLoop(ctx context.Context) {
 			// Just print to stdout for now.
 			// Sample a message.
 			log.Printf("<REPLY> Sampled message: %s\n", msg)
-			//ircClient.SendMessage(irc.PRIVMSG(msg.Channel, msg.Message))
+			log.Println(irc.PRIVMSG(msg.Channel, ""+msg.Message))
+			cb.ircClient.SendMessage(irc.PRIVMSG(msg.Channel, ""+msg.Message))
+
+			// Safe Guard: Delay at least 1 second before replying.
+			time.Sleep(1 * time.Second)
 		}
 	}
 }
@@ -125,7 +140,7 @@ func (cb *MainChatbot) mainBotLogic() irc.IrcMessageCallback {
 				log.Printf("<CALLBACK> Got mentioned: %s\n", parsed_message.Message)
 
 				// Directly enqueue the message to reply queue.
-				cb.EnqueueMessageToReply(BotMessage{
+				cb.enqueueMessageToReply(BotMessage{
 					Username: parsed_message.Prefix.Username,
 					Message:  parsed_message.Message,
 					Channel:  parsed_message.Params[0],
