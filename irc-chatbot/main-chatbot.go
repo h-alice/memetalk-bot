@@ -91,9 +91,10 @@ func (cb *MainChatbot) messageSamplerLoop(ctx context.Context) {
 
 		default:
 
+			stall_delay_delta := cb.maxReplyChatStallDelaySeconds - cb.minReplyChatStallDelaySeconds
+
 			if time.Since(cb.lastMessageTime) > time.Duration(
-				rand.IntN( // Randomize stall delay.
-					cb.maxReplyChatStallDelaySeconds-cb.minReplyChatStallDelaySeconds)+cb.minReplyChatStallDelaySeconds)*time.Second {
+				rand.IntN(stall_delay_delta)+cb.minReplyChatStallDelaySeconds)*time.Second {
 				continue // Stop sampling if chat is stalled.
 			}
 
@@ -217,8 +218,8 @@ func NewChatbot(config Config) *MainChatbot {
 
 		minReplyDelaySeconds:          config.ChatbotSetting.ReplySetting.ReplyMinDelaySeconds,
 		maxReplyDelaySeconds:          config.ChatbotSetting.ReplySetting.ReplyMaxDelaySeconds,
-		minReplyChatStallDelaySeconds: config.ChatbotSetting.ReplySetting.minReplyChatStallDelaySeconds,
-		maxReplyChatStallDelaySeconds: config.ChatbotSetting.ReplySetting.maxReplyChatStallDelaySeconds,
+		minReplyChatStallDelaySeconds: config.ChatbotSetting.ReplySetting.MinReplyChatStallDelaySeconds,
+		maxReplyChatStallDelaySeconds: config.ChatbotSetting.ReplySetting.MaxReplyChatStallDelaySeconds,
 	}
 
 }
