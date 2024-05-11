@@ -124,7 +124,7 @@ func (cb *MainChatbot) botReplyLoop(ctx context.Context) {
 			// Sample a message.
 			log.Printf("<REPLY> Sampled message: %s\n", msg)
 			log.Println(irc.PRIVMSG(msg.Channel, ""+msg.Message))
-			cb.ircClient.SendMessage(irc.PRIVMSG(msg.Channel, ""+msg.Message))
+			cb.ircClient.SendMessage(irc.PRIVMSG(msg.Channel, msg.Message))
 
 			// Safe Guard: Delay at least 1 second before replying.
 			time.Sleep(1 * time.Second)
