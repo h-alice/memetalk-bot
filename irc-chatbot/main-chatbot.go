@@ -93,6 +93,10 @@ func (cb *MainChatbot) messageSamplerLoop(ctx context.Context) {
 
 			stall_delay_delta := cb.maxReplyChatStallDelaySeconds - cb.minReplyChatStallDelaySeconds
 
+			if stall_delay_delta == 0 {
+				stall_delay_delta = 1 // Avoid invalid sampling interval.
+			}
+
 			if time.Since(cb.lastMessageTime) > time.Duration(
 				rand.IntN(stall_delay_delta)+cb.minReplyChatStallDelaySeconds)*time.Second {
 				continue // Stop sampling if chat is stalled.
