@@ -96,17 +96,22 @@ func (cb *MainChatbot) messageSamplerLoop(ctx context.Context) {
 
 		default:
 
+			// Check tall condition.
+			stall_condition := cb.lastSampleTime.After(cb.lastMessageTime)
+
 			// Calculate random delay time = random_sample(time_delta) + min_delay
 			stall_delay_delta := cb.maxReplyChatStallDelaySeconds - cb.minReplyChatStallDelaySeconds // Time delta.
 
+			// Randomly sample delay time.
 			sampled_delay_time := time.Duration(rand.IntN(stall_delay_delta)+cb.minReplyChatStallDelaySeconds) * time.Second // Random delay time.
-
 			if stall_delay_delta == 0 {
 				stall_delay_delta = 1 // Avoid invalid sampling interval.
 			}
 
-			if time.Since(cb.lastMessageTime) < sampled_delay_time && time.Since(cb.lastSampleTime) < sampled_delay_time {
-				continue // Stop sampling if chat is stalled.
+			if stall_condition {
+				if time.Since(cb.lastMessageTime) < sampled_delay_time && time.Since(cb.lastSampleTime) < sampled_delay_time {
+					continue // Stop sampling if chat is stalled.
+				}
 			}
 
 			if len(cb.MessageSampleContainer) == 0 {
@@ -117,6 +122,11 @@ func (cb *MainChatbot) messageSamplerLoop(ctx context.Context) {
 			sampled_message := cb.MessageSampler()
 			// Enqueue the message to reply.
 			cb.enqueueMessageToReply(sampled_message)
+
+			// Debug.
+			if stall_condition {
+				log.Printf("<SAMPLER> Message send during stall: %s\n", sampled_message)
+			}
 
 			// Apply delay before replying.
 			delay_seconds := rand.IntN(cb.maxReplyDelaySeconds-cb.minReplyDelaySeconds) + cb.minReplyDelaySeconds
@@ -140,7 +150,7 @@ func (cb *MainChatbot) botReplyLoop(ctx context.Context) {
 		case msg := <-cb.MessageReplyQueue:
 			// Just print to stdout for now.
 			// Sample a message.
-			log.Printf("<REPLY> Sampled message: %s\n", msg)
+			log.Printf("<REPLY> Message to reply: %s\n", msg)
 			log.Println(irc.PRIVMSG(msg.Channel, msg.Message))
 			cb.ircClient.SendMessage(irc.PRIVMSG(msg.Channel, msg.Message))
 
