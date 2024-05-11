@@ -21,8 +21,8 @@ func (bm BotMessage) String() string {
 }
 
 type MainChatbot struct {
-	chatbotName            string // Uses for tracking if bot got mentioned.
-	chatbotDisplayName     string
+	chatbotName            string
+	chatbotDisplayName     string // Uses for tracking if bot got mentioned.
 	MessageSampleContainer []BotMessage
 	MessageReplyQueue      chan BotMessage
 
@@ -34,9 +34,18 @@ type MainChatbot struct {
 	minReplyChatStallDelaySeconds int
 	maxReplyChatStallDelaySeconds int
 
-	// Non-Configurable local fields.
+	// LLM prompt crafter.
+	llmPromptTemplate      string
+	llmBosToken            string
+	llmAddGenerationPrompt bool
+
+	chatHistoryLookupLimit int
+
+	// Local fields.
 	lastMessageTime time.Time
 	lastSampleTime  time.Time
+
+	chatHistory []PromptMessage
 }
 
 func (cb *MainChatbot) EnqueueMessage(msg irc.IrcMessage) {
@@ -138,6 +147,41 @@ func (cb *MainChatbot) messageSamplerLoop(ctx context.Context) {
 	}
 }
 
+func (cb *MainChatbot) appendChatHistory(msg_user PromptMessage, msg_bot PromptMessage) {
+	cb.chatHistory = append(cb.chatHistory, msg_user, msg_bot)
+}
+
+func (cb *MainChatbot) replyPromptCrafter(messages string) (string, error) {
+	// Get last lookup limit messages.
+
+	var full_message_stack []PromptMessage
+	// Note that every (user, bot) message pair ia one history stack.
+	// So that we need to get last lookup_limit * 2 messages.
+	lookup_limit := cb.chatHistoryLookupLimit * 2
+
+	lookup_index := len(cb.chatHistory) - lookup_limit
+
+	if lookup_index <= 0 || lookup_index >= len(cb.chatHistory) {
+		// Do nothing.
+	} else {
+		full_message_stack = cb.chatHistory[lookup_index:]
+	}
+
+	// Append user messages.
+	full_message_stack = append(full_message_stack, PromptMessage{Role: "user", Content: messages})
+
+	// Render prompt.
+	prompt_renderer := NewPromptRenderer(cb.llmPromptTemplate, cb.llmBosToken, cb.llmAddGenerationPrompt)
+	prompt, err := prompt_renderer.RenderPrompt(full_message_stack)
+
+	if err != nil {
+		log.Printf("<PROMPT RENDERER> Error while rendering prompt %s, use raw message instead.\n", err)
+		return messages, err
+	}
+
+	return prompt, nil
+}
+
 // # Method: botReplyLoop
 //
 // Main bot reply loop.
@@ -151,6 +195,30 @@ func (cb *MainChatbot) botReplyLoop(ctx context.Context) {
 			// Just print to stdout for now.
 			// Sample a message.
 			log.Printf("<REPLY> Message to reply: %s\n", msg)
+
+			// Craft prompt.
+			prompt, err := cb.replyPromptCrafter(msg.Message)
+			if err != nil {
+				// Ignore error, we have handled it in previous step.
+				log.Println("<REPLY> Error while crafting prompt: ", err)
+			}
+
+			log.Println("<REPLY> Prompt crafted: ", prompt)
+
+			bot_reply := BotMessage{
+				Username: cb.chatbotName,
+				Message:  msg.Message, // Dummy, connect to LLM model.
+			}
+
+			// Save history
+			cb.appendChatHistory(PromptMessage{
+				Role:    "user",
+				Content: msg.Message,
+			}, PromptMessage{
+				Role:    "bot",
+				Content: bot_reply.Message,
+			})
+
 			log.Println(irc.PRIVMSG(msg.Channel, msg.Message))
 			cb.ircClient.SendMessage(irc.PRIVMSG(msg.Channel, msg.Message))
 
@@ -243,6 +311,10 @@ func NewChatbot(config Config) *MainChatbot {
 		joinChannels:       config.TwitchIrcConfig.ChannelList,
 		chatbotName:        config.TwitchIrcConfig.Username,
 		chatbotDisplayName: config.TwitchIrcConfig.DisplayName,
+
+		llmPromptTemplate:      config.ChatbotSetting.LlmSetting.PromptSetting.PromptTemplate,
+		llmBosToken:            config.ChatbotSetting.LlmSetting.PromptSetting.BosToken,
+		llmAddGenerationPrompt: config.ChatbotSetting.LlmSetting.PromptSetting.AddGenerationPrompt,
 
 		minReplyDelaySeconds:          config.ChatbotSetting.ReplySetting.ReplyMinDelaySeconds,
 		maxReplyDelaySeconds:          config.ChatbotSetting.ReplySetting.ReplyMaxDelaySeconds,

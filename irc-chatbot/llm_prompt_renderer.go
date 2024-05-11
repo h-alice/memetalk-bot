@@ -4,7 +4,7 @@ import (
 	"github.com/kluctl/go-jinja2"
 )
 
-type Message struct {
+type PromptMessage struct {
 	Role    string
 	Content string
 }
@@ -15,14 +15,14 @@ type PromptRenderer struct {
 	AddGenerationPrompt bool
 }
 
-func castMessageStructToMap(message Message) map[string]string {
+func castMessageStructToMap(message PromptMessage) map[string]string {
 	return map[string]string{
 		"role":    message.Role,
 		"content": message.Content,
 	}
 }
 
-func castMessageListToMapList(messages []Message) []map[string]string {
+func castMessageListToMapList(messages []PromptMessage) []map[string]string {
 	var result []map[string]string
 	for _, message := range messages {
 		result = append(result, castMessageStructToMap(message))
@@ -38,7 +38,7 @@ func NewPromptRenderer(promptTemplate string, bosToken string, addGenerationProm
 	}
 }
 
-func (pr *PromptRenderer) RenderPrompt(messages []Message) (string, error) {
+func (pr *PromptRenderer) RenderPrompt(messages []PromptMessage) (string, error) {
 
 	if len(messages) == 0 {
 		return "", nil
