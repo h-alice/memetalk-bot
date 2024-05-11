@@ -118,7 +118,7 @@ func (cb *MainChatbot) messageSamplerLoop(ctx context.Context) {
 			}
 
 			if stall_condition {
-				if time.Since(cb.lastMessageTime) < sampled_delay_time && time.Since(cb.lastSampleTime) < sampled_delay_time {
+				if time.Since(cb.lastSampleTime) < sampled_delay_time {
 					continue // Stop sampling if chat is stalled.
 				}
 			}
