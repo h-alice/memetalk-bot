@@ -28,8 +28,13 @@ type MainChatbot struct {
 	joinChannels []string
 	ircClient    *irc.IrcClient
 
-	minReplyDelaySeconds int
-	maxReplyDelaySeconds int
+	minReplyDelaySeconds          int
+	maxReplyDelaySeconds          int
+	minReplyChatStallDelaySeconds int
+	maxReplyChatStallDelaySeconds int
+
+	// Non-Configurable local fields.
+	lastMessageTime time.Time
 }
 
 func (cb *MainChatbot) EnqueueMessage(msg irc.IrcMessage) {
@@ -86,6 +91,12 @@ func (cb *MainChatbot) messageSamplerLoop(ctx context.Context) {
 
 		default:
 
+			if time.Since(cb.lastMessageTime) > time.Duration(
+				rand.IntN( // Randomize stall delay.
+					cb.maxReplyChatStallDelaySeconds-cb.minReplyChatStallDelaySeconds)+cb.minReplyChatStallDelaySeconds)*time.Second {
+				continue // Stop sampling if chat is stalled.
+			}
+
 			if len(cb.MessageSampleContainer) == 0 {
 				continue
 			}
@@ -132,6 +143,9 @@ func (cb *MainChatbot) mainBotLogic() irc.IrcMessageCallback {
 		// We only care about PRIVMSG messages.
 		if parsed_message.Command == "PRIVMSG" {
 
+			// Update last message time.
+			cb.lastMessageTime = time.Now()
+
 			// Handle direct mentions.
 			name_tag := "@" + cb.chatbotName
 
@@ -167,7 +181,7 @@ func (cb *MainChatbot) Start(ctx context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
 
 	// Start message sampler loop.
-	cb.MessageReplyQueue = make(chan BotMessage, 10)
+	cb.MessageReplyQueue = make(chan BotMessage, 100)
 	go cb.messageSamplerLoop(ctx)
 
 	// Start bot reply loop.
@@ -198,8 +212,10 @@ func NewChatbot(config Config) *MainChatbot {
 		joinChannels: config.TwitchIrcConfig.ChannelList,
 		chatbotName:  config.TwitchIrcConfig.Username,
 
-		minReplyDelaySeconds: config.ChatbotSetting.ReplySetting.ReplyMinDelaySeconds,
-		maxReplyDelaySeconds: config.ChatbotSetting.ReplySetting.ReplyMaxDelaySeconds,
+		minReplyDelaySeconds:          config.ChatbotSetting.ReplySetting.ReplyMinDelaySeconds,
+		maxReplyDelaySeconds:          config.ChatbotSetting.ReplySetting.ReplyMaxDelaySeconds,
+		minReplyChatStallDelaySeconds: config.ChatbotSetting.ReplySetting.minReplyChatStallDelaySeconds,
+		maxReplyChatStallDelaySeconds: config.ChatbotSetting.ReplySetting.maxReplyChatStallDelaySeconds,
 	}
 
 }

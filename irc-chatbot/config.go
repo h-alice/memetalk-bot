@@ -17,10 +17,12 @@ type ChatbotSetting struct {
 }
 
 type ChatbotReplySetting struct {
-	ReplyMention           bool `yaml:"reply-mention"`
-	ReplyMinDelaySeconds   int  `yaml:"reply-min-delay-seconds"`
-	ReplyMaxDelaySeconds   int  `yaml:"reply-max-delay-seconds"`
-	MessageSampleQueueSize int  `yaml:"message-sample-queue-size"`
+	ReplyMention                  bool `yaml:"reply-mention"`
+	ReplyMinDelaySeconds          int  `yaml:"reply-min-delay-seconds"`
+	ReplyMaxDelaySeconds          int  `yaml:"reply-max-delay-seconds"`
+	MessageSampleQueueSize        int  `yaml:"message-sample-queue-size"`
+	minReplyChatStallDelaySeconds int  `yaml:"reply-min-chat-stall-delay-seconds"`
+	maxReplyChatStallDelaySeconds int  `yaml:"reply-max-chat-stall-delay-seconds"`
 }
 
 type ChatbotLlmModelApiSetting struct {
