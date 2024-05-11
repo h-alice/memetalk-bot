@@ -7,6 +7,7 @@ import (
 // YAML comfiguration for Twitch IRC bot.
 type TwitchIrcConfig struct {
 	Username    string   `yaml:"username"`
+	DisplayName string   `yaml:"display-name"`
 	Password    string   `yaml:"password"`
 	ChannelList []string `yaml:"join-channels"`
 }

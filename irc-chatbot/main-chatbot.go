@@ -22,6 +22,7 @@ func (bm BotMessage) String() string {
 
 type MainChatbot struct {
 	chatbotName            string // Uses for tracking if bot got mentioned.
+	chatbotDisplayName     string
 	MessageSampleContainer []BotMessage
 	MessageReplyQueue      chan BotMessage
 
@@ -152,7 +153,7 @@ func (cb *MainChatbot) mainBotLogic() irc.IrcMessageCallback {
 			cb.lastMessageTime = time.Now()
 
 			// Handle direct mentions.
-			name_tag := "@" + cb.chatbotName
+			name_tag := "@" + cb.chatbotDisplayName
 
 			// Check if name tag is in the message.
 			if strings.Contains(parsed_message.Message, name_tag) {
@@ -216,9 +217,10 @@ func NewChatbot(config Config) *MainChatbot {
 
 	ircClient := irc.NewTwitchIrcClient(config.TwitchIrcConfig.Username, config.TwitchIrcConfig.Password)
 	return &MainChatbot{
-		ircClient:    ircClient,
-		joinChannels: config.TwitchIrcConfig.ChannelList,
-		chatbotName:  config.TwitchIrcConfig.Username,
+		ircClient:          ircClient,
+		joinChannels:       config.TwitchIrcConfig.ChannelList,
+		chatbotName:        config.TwitchIrcConfig.Username,
+		chatbotDisplayName: config.TwitchIrcConfig.DisplayName,
 
 		minReplyDelaySeconds:          config.ChatbotSetting.ReplySetting.ReplyMinDelaySeconds,
 		maxReplyDelaySeconds:          config.ChatbotSetting.ReplySetting.ReplyMaxDelaySeconds,
