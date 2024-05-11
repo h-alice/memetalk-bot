@@ -36,7 +36,7 @@ type MainChatbot struct {
 
 	// Non-Configurable local fields.
 	lastMessageTime time.Time
-	lastSentTime    time.Time
+	lastSampleTime  time.Time
 }
 
 func (cb *MainChatbot) EnqueueMessage(msg irc.IrcMessage) {
@@ -84,6 +84,9 @@ func (cb *MainChatbot) MessageSampler() BotMessage {
 	return cb.MessageSampleContainer[rand.IntN(len(cb.MessageSampleContainer))]
 }
 
+// # Method: messageSamplerLoop
+//
+// Randomly sample messages from the container and reply.
 func (cb *MainChatbot) messageSamplerLoop(ctx context.Context) {
 
 	for {
@@ -93,15 +96,16 @@ func (cb *MainChatbot) messageSamplerLoop(ctx context.Context) {
 
 		default:
 
-			stall_delay_delta := cb.maxReplyChatStallDelaySeconds - cb.minReplyChatStallDelaySeconds
+			// Calculate random delay time = random_sample(time_delta) + min_delay
+			stall_delay_delta := cb.maxReplyChatStallDelaySeconds - cb.minReplyChatStallDelaySeconds // Time delta.
 
-			sampled_delay_time := time.Duration(rand.IntN(stall_delay_delta)+cb.minReplyChatStallDelaySeconds) * time.Second
+			sampled_delay_time := time.Duration(rand.IntN(stall_delay_delta)+cb.minReplyChatStallDelaySeconds) * time.Second // Random delay time.
 
 			if stall_delay_delta == 0 {
 				stall_delay_delta = 1 // Avoid invalid sampling interval.
 			}
 
-			if time.Since(cb.lastMessageTime) < sampled_delay_time && time.Since(cb.lastSentTime) < sampled_delay_time {
+			if time.Since(cb.lastMessageTime) < sampled_delay_time && time.Since(cb.lastSampleTime) < sampled_delay_time {
 				continue // Stop sampling if chat is stalled.
 			}
 
@@ -116,6 +120,9 @@ func (cb *MainChatbot) messageSamplerLoop(ctx context.Context) {
 
 			// Apply delay before replying.
 			delay_seconds := rand.IntN(cb.maxReplyDelaySeconds-cb.minReplyDelaySeconds) + cb.minReplyDelaySeconds
+
+			cb.lastSampleTime = time.Now() // Update last sample time.
+
 			time.Sleep(time.Duration(delay_seconds) * time.Second)
 		}
 	}
@@ -136,8 +143,6 @@ func (cb *MainChatbot) botReplyLoop(ctx context.Context) {
 			log.Printf("<REPLY> Sampled message: %s\n", msg)
 			log.Println(irc.PRIVMSG(msg.Channel, msg.Message))
 			cb.ircClient.SendMessage(irc.PRIVMSG(msg.Channel, msg.Message))
-
-			cb.lastSentTime = time.Now()
 
 			// Safe Guard: Delay at least 1 second before replying.
 			time.Sleep(1 * time.Second)
