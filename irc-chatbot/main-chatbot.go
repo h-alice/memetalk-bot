@@ -153,6 +153,9 @@ func (cb *MainChatbot) mainBotLogic() irc.IrcMessageCallback {
 			if strings.Contains(parsed_message.Message, name_tag) {
 				log.Printf("<CALLBACK> Got mentioned: %s\n", parsed_message.Message)
 
+				// Remove the metion tag from message.
+				parsed_message.Message = strings.ReplaceAll(parsed_message.Message, name_tag, "")
+
 				// Directly enqueue the message to reply queue.
 				cb.enqueueMessageToReply(BotMessage{
 					Username: parsed_message.Prefix.Username,
